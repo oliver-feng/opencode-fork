@@ -1,0 +1,131 @@
+#!/usr/bin/env bun
+
+// Builds the opencode binary for one or more platforms and packs each one as a
+// runnable .NET global tool NuGet package.
+//
+// The Bun build produces a self-contained executable per platform, so every
+// package targets exactly one runtime identifier and needs no runtime on the
+// host. OPENCODE_VERSION is set explicitly: left unset, Script.version derives
+// a version from the branch name and, on the latest channel, reaches out to
+// registry.npmjs.org.
+
+import { $ } from "bun"
+import fs from "fs/promises"
+import path from "path"
+
+const RIDS: Record<string, string> = {
+  "win-x64": "windows-x64",
+  "linux-x64": "linux-x64",
+}
+
+const root = path.resolve(import.meta.dir, "..")
+const codingAgentDir = path.join(root, "packages", "opencode")
+
+function printUsage() {
+  console.log(`Usage: bun run script/package-nuget.ts [options]
+
+Builds the opencode binary and packs it as a .NET global tool package, one
+package per runtime identifier.
+
+Options:
+  --rid <list>    Comma separated runtime identifiers (default win-x64).
+                  Supported: ${Object.keys(RIDS).join(", ")}
+  --version <v>   Version for the binary and the package (default the version
+                  in packages/opencode/package.json)
+  --skip-build    Reuse the existing packages/opencode/dist output
+  --skip-deps     Skip the build's cross-platform dependency install. Safe once
+                  it has run before; it rewrites bun.lock with resolved tarball
+                  URLs, so avoid committing that churn.
+  --skip-pack     Stage the payload but do not run dotnet pack
+  --out <dir>     Output directory for the .nupkg (default dist/nuget, which is
+                  gitignored; note artifacts/ in this repo is tracked)
+  --help          Show this help
+`)
+}
+
+const args = process.argv.slice(2)
+const options = {
+  out: undefined as string | undefined,
+  rids: ["win-x64"],
+  skipBuild: false,
+  skipDeps: false,
+  skipPack: false,
+  version: undefined as string | undefined,
+}
+
+for (let i = 0; i < args.length; i++) {
+  const arg = args[i]
+  if (arg === "--help") {
+    printUsage()
+    process.exit(0)
+  } else if (arg === "--skip-build") {
+    options.skipBuild = true
+  } else if (arg === "--skip-deps") {
+    options.skipDeps = true
+  } else if (arg === "--skip-pack") {
+    options.skipPack = true
+  } else if (arg === "--rid") {
+    const value = args[++i]
+    if (!value) throw new Error("--rid requires a value")
+    options.rids = value.split(",").map((x) => x.trim())
+  } else if (arg === "--version") {
+    const value = args[++i]
+    if (!value) throw new Error("--version requires a value")
+    options.version = value
+  } else if (arg === "--out") {
+    const value = args[++i]
+    if (!value) throw new Error("--out requires a directory")
+    options.out = value
+  } else {
+    throw new Error(`Unknown option: ${arg}`)
+  }
+}
+
+for (const rid of options.rids) {
+  if (!RIDS[rid]) throw new Error(`Unsupported runtime identifier: ${rid}. Supported: ${Object.keys(RIDS).join(", ")}`)
+}
+
+const pkg = await Bun.file(path.join(codingAgentDir, "package.json")).json()
+const version = options.version ?? pkg.version
+const artifactDir = path.resolve(options.out ?? path.join(root, "dist", "nuget"))
+const projectPath = path.join(root, "nuget", "Opencode.Fork.csproj")
+
+if (!options.skipBuild) {
+  const targets = options.rids.map((rid) => RIDS[rid]).join(",")
+  console.log(`Building opencode ${version} for ${targets}`)
+  const buildArgs = [`--targets=${targets}`, ...(options.skipDeps ? ["--skip-install"] : [])]
+  await $`bun run --cwd ${codingAgentDir} build ${buildArgs}`.env({
+    ...process.env,
+    OPENCODE_VERSION: version,
+  })
+}
+
+await fs.mkdir(artifactDir, { recursive: true })
+
+for (const rid of options.rids) {
+  const target = RIDS[rid]
+  const binDir = path.join(codingAgentDir, "dist", `${pkg.name}-${target}`, "bin")
+  if (!(await fs.exists(binDir))) {
+    throw new Error(`Missing build output for ${rid}: ${binDir}`)
+  }
+
+  const payloadDir = path.join(root, "nuget", "payload", rid)
+  await fs.rm(payloadDir, { force: true, recursive: true })
+  await fs.mkdir(payloadDir, { recursive: true })
+  await fs.cp(binDir, payloadDir, { recursive: true })
+  console.log(`Staged ${rid} payload from ${binDir}`)
+
+  if (options.skipPack) continue
+
+  await $`dotnet pack ${projectPath} --configuration Release -p:PayloadRid=${rid} -p:Version=${version} --output ${artifactDir}`
+  console.log(`Packed Opencode.Fork.${rid}.${version}.nupkg`)
+}
+
+if (!options.skipPack) {
+  console.log(`\nPackages in ${artifactDir}`)
+  console.log("\nInstall one with:")
+  console.log(
+    `  dotnet tool install -g Opencode.Fork.${options.rids[0]} --version ${version} --add-source ${artifactDir}`,
+  )
+  console.log("  opencode-fork --version")
+}

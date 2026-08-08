@@ -113,26 +113,57 @@ const allTargets: {
   },
 ]
 
-const targets = singleFlag
-  ? allTargets.filter((item) => {
-      if (item.os !== process.platform || item.arch !== process.arch) {
-        return false
-      }
+const targetName = (item: (typeof allTargets)[number]) =>
+  [
+    // changing to win32 flags npm for some reason
+    item.os === "win32" ? "windows" : item.os,
+    item.arch,
+    item.avx2 === false ? "baseline" : undefined,
+    item.abi === undefined ? undefined : item.abi,
+  ]
+    .filter(Boolean)
+    .join("-")
 
-      // When building for the current platform, prefer a single native binary by default.
-      // Baseline binaries require additional Bun artifacts and can be flaky to download.
-      if (item.avx2 === false) {
-        return baselineFlag
-      }
+// --targets=windows-x64,linux-x64 builds an explicit subset, which is what the
+// NuGet packaging needs: one platform at a time, including cross-compiles.
+const targetsFlag = process.argv.find((x) => x.startsWith("--targets="))?.slice("--targets=".length)
 
-      // also skip abi-specific builds for the same reason
-      if (item.abi !== undefined) {
-        return false
-      }
+const requestedTargets = targetsFlag
+  ? targetsFlag
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean)
+  : undefined
 
-      return true
-    })
-  : allTargets
+if (requestedTargets) {
+  const unknown = requestedTargets.filter((x) => !allTargets.some((item) => targetName(item) === x))
+  if (unknown.length) {
+    throw new Error(`Unknown build targets: ${unknown.join(", ")}. Known: ${allTargets.map(targetName).join(", ")}`)
+  }
+}
+
+const targets = requestedTargets
+  ? allTargets.filter((item) => requestedTargets.includes(targetName(item)))
+  : singleFlag
+    ? allTargets.filter((item) => {
+        if (item.os !== process.platform || item.arch !== process.arch) {
+          return false
+        }
+
+        // When building for the current platform, prefer a single native binary by default.
+        // Baseline binaries require additional Bun artifacts and can be flaky to download.
+        if (item.avx2 === false) {
+          return baselineFlag
+        }
+
+        // also skip abi-specific builds for the same reason
+        if (item.abi !== undefined) {
+          return false
+        }
+
+        return true
+      })
+    : allTargets
 
 await $`rm -rf dist`
 
@@ -143,16 +174,7 @@ if (!skipInstall) {
   await $`bun install --os="*" --cpu="*" @ff-labs/fff-bun@${pkg.dependencies["@ff-labs/fff-bun"]}`
 }
 for (const item of targets) {
-  const name = [
-    pkg.name,
-    // changing to win32 flags npm for some reason
-    item.os === "win32" ? "windows" : item.os,
-    item.arch,
-    item.avx2 === false ? "baseline" : undefined,
-    item.abi === undefined ? undefined : item.abi,
-  ]
-    .filter(Boolean)
-    .join("-")
+  const name = [pkg.name, targetName(item)].join("-")
   console.log(`building ${name}`)
   await $`mkdir -p dist/${name}/bin`
 
