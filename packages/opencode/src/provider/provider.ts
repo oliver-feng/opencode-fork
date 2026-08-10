@@ -179,10 +179,19 @@ const AZURE_DEFAULT_API_VERSION = "2024-10-21"
 const AZURE_DEFAULT_CONTEXT = 128_000
 const AZURE_DEFAULT_OUTPUT = 16_384
 
-/** `https://x.services.ai.azure.com` and `.../openai` both mean the latter. */
+/**
+ * The base URL for an AI Foundry endpoint: `.../openai/v1`.
+ *
+ * Accepts the bare host, `.../openai`, or `.../openai/v1` and normalises to the last. The `/v1` is
+ * not optional: with useDeploymentBasedUrls false the SDK builds `{baseURL}{path}` verbatim for a
+ * non-`*.openai.azure.com` host -- it inserts `/v1` only for the classic Azure OpenAI hostname --
+ * so a base ending at `/openai` yields `/openai/responses`, which Foundry 404s. The working route is
+ * `/openai/v1/responses`.
+ */
 function azureBaseURL(endpoint: string) {
   const trimmed = endpoint.trim().replace(/\/+$/, "")
-  return trimmed.endsWith("/openai") ? trimmed : `${trimmed}/openai`
+  const withOpenAI = trimmed.endsWith("/openai") || trimmed.includes("/openai/") ? trimmed : `${trimmed}/openai`
+  return withOpenAI.endsWith("/v1") ? withOpenAI : `${withOpenAI}/v1`
 }
 
 function parseAzureDeployments(value: unknown): string[] {
@@ -336,9 +345,13 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
           options: {
             baseURL: azureBaseURL(endpoint),
             apiVersion,
-            // Puts the deployment in the path -- /openai/deployments/{name}/... -- which is the
-            // shape Foundry answers on, and which the api-version above belongs to.
-            useDeploymentBasedUrls: true,
+            // The /openai/v1 path, not /openai/deployments/{name}. A Foundry account
+            // (*.services.ai.azure.com) serves the Responses API -- which a reasoning model like
+            // gpt-5.6-sol requires for tool calls -- only under /openai/v1/responses; the
+            // deployment-based path 404s it. The deployment is carried in the request body as the
+            // model id, not in the URL. The SDK omits the api-version query param on this path for a
+            // non-*.openai.azure.com host, which is what the v1 endpoint expects.
+            useDeploymentBasedUrls: false,
           },
         }
       }
