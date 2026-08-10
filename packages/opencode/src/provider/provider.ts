@@ -2098,6 +2098,22 @@ const layer = Layer.effect(
       }
 
       const configured = Object.keys(cfg.provider ?? {})
+
+      // Where the environment named an Azure deployment, that deployment is the intended default --
+      // the container is configured for exactly one model and expects the session to open on it, not
+      // on whichever other provider (bedrock, say) happened to autoload first. Only when nothing was
+      // explicitly configured, so a real config or a --model still wins over this.
+      if (configured.length === 0) {
+        const azureDeployment = process.env[AZURE_DEPLOYMENT_ENV]?.trim()
+        if (azureDeployment) {
+          const azure = s.providers[ProviderV2.ID.azure]
+          const model = azure?.models[azureDeployment] ?? (azure ? sort(Object.values(azure.models))[0] : undefined)
+          if (azure && model) {
+            return { providerID: azure.id, modelID: model.id }
+          }
+        }
+      }
+
       const provider = Object.values(s.providers).find((p) => configured.length === 0 || configured.includes(p.id))
       if (!provider) return yield* new NoProvidersError()
       const [model] = sort(Object.values(provider.models))
