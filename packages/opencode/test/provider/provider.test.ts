@@ -2057,3 +2057,76 @@ it.effect("opencode loader keeps paid models when auth exists", () =>
     expect(keyedCount).toBeGreaterThan(0)
   }).pipe(provideMultiInstance),
 )
+
+// @ai-sdk/azure builds request URLs through a url() function rather than a baseURL, so this
+// asserts the actual path a request would take -- deployment segment and api-version included.
+const azureRequestURL = (language: unknown, modelId: string) =>
+  (language as { config: { url: (input: { path: string; modelId: string }) => string } }).config.url({
+    path: "/responses",
+    modelId,
+  })
+
+it.instance("OPENCODE_AZURE_ENDPOINT exposes the deployment as a model", () =>
+  Effect.gen(function* () {
+    yield* set("OPENCODE_AZURE_ENDPOINT", "https://mmd-devops.services.ai.azure.com")
+    yield* set("OPENCODE_AZURE_DEPLOYMENT", "gpt-5.6-sol")
+    yield* set("OPENCODE_AZURE_TOKEN", "identity-token")
+
+    const providers = yield* list
+    const azure = providers[ProviderV2.ID.azure]
+    expect(azure).toBeDefined()
+    expect(Object.keys(azure.models)).toEqual(["gpt-5.6-sol"])
+  }),
+)
+
+it.instance("OPENCODE_AZURE_ENDPOINT resolves an AI Foundry base URL", () =>
+  Effect.gen(function* () {
+    yield* set("OPENCODE_AZURE_ENDPOINT", "https://mmd-devops.services.ai.azure.com")
+    yield* set("OPENCODE_AZURE_DEPLOYMENT", "gpt-5.6-sol")
+    yield* set("OPENCODE_AZURE_TOKEN", "identity-token")
+
+    const provider = yield* Provider.Service
+    const model = yield* provider.getModel(ProviderV2.ID.azure, ModelV2.ID.make("gpt-5.6-sol"))
+    const language = yield* provider.getLanguage(model)
+    expect(azureRequestURL(language, "gpt-5.6-sol")).toBe(
+      "https://mmd-devops.services.ai.azure.com/openai/deployments/gpt-5.6-sol/responses?api-version=2024-10-21",
+    )
+  }),
+)
+
+it.instance("OPENCODE_AZURE_ENDPOINT tolerates a trailing /openai and slashes", () =>
+  Effect.gen(function* () {
+    yield* set("OPENCODE_AZURE_ENDPOINT", "https://mmd-devops.services.ai.azure.com/openai/")
+    yield* set("OPENCODE_AZURE_DEPLOYMENT", "gpt-5.6-sol")
+    yield* set("OPENCODE_AZURE_TOKEN", "identity-token")
+
+    const provider = yield* Provider.Service
+    const model = yield* provider.getModel(ProviderV2.ID.azure, ModelV2.ID.make("gpt-5.6-sol"))
+    const language = yield* provider.getLanguage(model)
+    expect(azureRequestURL(language, "gpt-5.6-sol")).toBe(
+      "https://mmd-devops.services.ai.azure.com/openai/deployments/gpt-5.6-sol/responses?api-version=2024-10-21",
+    )
+  }),
+)
+
+it.instance("OPENCODE_AZURE_DEPLOYMENT accepts several deployments", () =>
+  Effect.gen(function* () {
+    yield* set("OPENCODE_AZURE_ENDPOINT", "https://mmd-devops.services.ai.azure.com")
+    yield* set("OPENCODE_AZURE_DEPLOYMENT", "gpt-5.6-sol, gpt-4o-mini")
+    yield* set("OPENCODE_AZURE_TOKEN", "identity-token")
+
+    const providers = yield* list
+    const azure = providers[ProviderV2.ID.azure]
+    expect(Object.keys(azure.models).sort()).toEqual(["gpt-4o-mini", "gpt-5.6-sol"])
+  }),
+)
+
+it.instance("an endpoint without an identity leaves azure disconnected", () =>
+  Effect.gen(function* () {
+    yield* set("OPENCODE_AZURE_ENDPOINT", "https://mmd-devops.services.ai.azure.com")
+    yield* set("OPENCODE_AZURE_DEPLOYMENT", "gpt-5.6-sol")
+
+    const providers = yield* list
+    expect(providers[ProviderV2.ID.azure]).toBeUndefined()
+  }),
+)

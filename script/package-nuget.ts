@@ -18,6 +18,17 @@ const RIDS: Record<string, string> = {
   "linux-x64": "linux-x64",
 }
 
+// The published version of this fork. Bump the prerelease label here for each
+// build that goes to the feed -- beta.1, beta.2, and so on.
+//
+// Deliberately not read from packages/opencode/package.json: that number is
+// upstream opencode's, so merging upstream would silently change what this
+// package claims to be, and two builds of the same upstream version could not
+// be told apart. The prerelease label needs its SemVer hyphen (1.18.4-beta.1,
+// not 1.18.4.beta.1) -- NuGet requires a numeric fourth component, so the
+// dotted form is rejected outright.
+const PACKAGE_VERSION = "1.18.4-beta.2"
+
 const root = path.resolve(import.meta.dir, "..")
 const codingAgentDir = path.join(root, "packages", "opencode")
 
@@ -30,8 +41,8 @@ package per runtime identifier.
 Options:
   --rid <list>    Comma separated runtime identifiers (default win-x64).
                   Supported: ${Object.keys(RIDS).join(", ")}
-  --version <v>   Version for the binary and the package (default the version
-                  in packages/opencode/package.json)
+  --version <v>   Version for the binary and the package (default
+                  ${PACKAGE_VERSION}, set by PACKAGE_VERSION in this script)
   --skip-build    Reuse the existing packages/opencode/dist output
   --skip-deps     Skip the build's cross-platform dependency install. Safe once
                   it has run before; it rewrites bun.lock with resolved tarball
@@ -85,10 +96,11 @@ for (const rid of options.rids) {
   if (!RIDS[rid]) throw new Error(`Unsupported runtime identifier: ${rid}. Supported: ${Object.keys(RIDS).join(", ")}`)
 }
 
+// pkg is still read for its name, which the build uses in its output paths.
 const pkg = await Bun.file(path.join(codingAgentDir, "package.json")).json()
-const version = options.version ?? pkg.version
+const version = options.version ?? PACKAGE_VERSION
 const artifactDir = path.resolve(options.out ?? path.join(root, "dist", "nuget"))
-const projectPath = path.join(root, "nuget", "Opencode.Fork.csproj")
+const projectPath = path.join(root, "nuget", "Opencode.Contained.csproj")
 
 if (!options.skipBuild) {
   const targets = options.rids.map((rid) => RIDS[rid]).join(",")
@@ -118,14 +130,14 @@ for (const rid of options.rids) {
   if (options.skipPack) continue
 
   await $`dotnet pack ${projectPath} --configuration Release -p:PayloadRid=${rid} -p:Version=${version} --output ${artifactDir}`
-  console.log(`Packed Opencode.Fork.${rid}.${version}.nupkg`)
+  console.log(`Packed Opencode.Contained.${rid}.${version}.nupkg`)
 }
 
 if (!options.skipPack) {
   console.log(`\nPackages in ${artifactDir}`)
   console.log("\nInstall one with:")
   console.log(
-    `  dotnet tool install -g Opencode.Fork.${options.rids[0]} --version ${version} --add-source ${artifactDir}`,
+    `  dotnet tool install -g Opencode.Contained.${options.rids[0]} --version ${version} --add-source ${artifactDir}`,
   )
   console.log("  opencode-fork --version")
 }

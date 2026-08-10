@@ -11,6 +11,7 @@ import { Plugin } from "../plugin"
 import { serviceUse } from "@opencode-ai/core/effect/service-use"
 import { type LanguageModelV3 } from "@ai-sdk/provider"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
+import { ManagedIdentity } from "./managed-identity"
 import { Auth } from "../auth"
 import { Env } from "../env"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
@@ -159,6 +160,74 @@ function selectAzureLanguageModel(sdk: any, modelID: string, useChat: boolean) {
   return sdk.languageModel(modelID)
 }
 
+/**
+ * Env vars for an Azure endpoint given as a URL.
+ *
+ * AZURE_RESOURCE_NAME can only ever name a `*.openai.azure.com` resource, because that hostname is
+ * built from it. An AI Foundry endpoint (`*.services.ai.azure.com`) has no resource name that
+ * produces it, so it needs the URL itself -- and without these it could only be reached through a
+ * config file, which a container has no good way to ship.
+ */
+const AZURE_ENDPOINT_ENV = "OPENCODE_AZURE_ENDPOINT"
+const AZURE_DEPLOYMENT_ENV = "OPENCODE_AZURE_DEPLOYMENT"
+const AZURE_API_VERSION_ENV = "OPENCODE_AZURE_API_VERSION"
+
+/** Matches the deployment-based URL shape: /openai/deployments/{name}/...?api-version=... */
+const AZURE_DEFAULT_API_VERSION = "2024-10-21"
+
+/** Conservative limits for a deployment the catalog has never heard of. */
+const AZURE_DEFAULT_CONTEXT = 128_000
+const AZURE_DEFAULT_OUTPUT = 16_384
+
+/** `https://x.services.ai.azure.com` and `.../openai` both mean the latter. */
+function azureBaseURL(endpoint: string) {
+  const trimmed = endpoint.trim().replace(/\/+$/, "")
+  return trimmed.endsWith("/openai") ? trimmed : `${trimmed}/openai`
+}
+
+function parseAzureDeployments(value: unknown): string[] {
+  if (typeof value !== "string") return []
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item !== "")
+}
+
+/**
+ * A model entry for a deployment the catalog does not describe.
+ *
+ * Everything here is a guess except the id, so the defaults lean permissive on capability and
+ * conservative on limits: a wrong "cannot do tool calls" makes the model useless, while a context
+ * window set too low only costs an earlier compaction. opencode.json can override any of it under
+ * `provider.azure.models`.
+ */
+function azureModel(deployment: string): Model {
+  const modalities = { text: true, audio: false, image: false, video: false, pdf: false }
+  return {
+    id: ModelV2.ID.make(deployment),
+    providerID: ProviderV2.ID.azure,
+    api: { id: deployment, npm: "@ai-sdk/azure", url: "" },
+    name: deployment,
+    family: "",
+    status: "active",
+    capabilities: {
+      temperature: false,
+      reasoning: false,
+      attachment: false,
+      toolcall: true,
+      input: { ...modalities },
+      output: { ...modalities },
+      interleaved: false,
+    },
+    cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+    limit: { context: AZURE_DEFAULT_CONTEXT, output: AZURE_DEFAULT_OUTPUT },
+    options: {},
+    headers: {},
+    release_date: "",
+    variants: {},
+  }
+}
+
 function selectBedrockMantleLanguageModel(sdk: BundledSDK, modelID: string) {
   if (modelID === "openai.gpt-oss-safeguard-20b" || modelID === "openai.gpt-oss-safeguard-120b")
     return sdk.chat?.(modelID) ?? sdk.languageModel(modelID)
@@ -240,6 +309,40 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
     azure: Effect.fnUntraced(function* (provider: Info) {
       const env = yield* dep.env()
       const auth = yield* dep.auth(provider.id)
+
+      // An endpoint URL wins over a resource name: it is the only way to express an AI Foundry
+      // host, and nothing sets it by accident. Everything below this branch is the original
+      // resource-name path, unchanged.
+      const endpoint = (yield* dep.get(AZURE_ENDPOINT_ENV))?.trim()
+      if (endpoint) {
+        const deployments = parseAzureDeployments(yield* dep.get(AZURE_DEPLOYMENT_ENV))
+
+        // A deployment name is the model: Azure routes on the deployment, not on the underlying
+        // model id. Where the catalog already describes a model of that name its limits and
+        // capabilities are kept; otherwise the deployment gets defaults.
+        if (deployments.length > 0) {
+          provider.models = Object.fromEntries(
+            deployments.map((deployment) => [deployment, provider.models[deployment] ?? azureModel(deployment)]),
+          )
+        }
+
+        const apiVersion = (yield* dep.get(AZURE_API_VERSION_ENV))?.trim() || AZURE_DEFAULT_API_VERSION
+
+        return {
+          autoload: ManagedIdentity.available() && Object.keys(provider.models).length > 0,
+          async getModel(sdk: any, modelID: string, options?: Record<string, any>) {
+            return selectAzureLanguageModel(sdk, modelID, Boolean(options?.["useCompletionUrls"]))
+          },
+          options: {
+            baseURL: azureBaseURL(endpoint),
+            apiVersion,
+            // Puts the deployment in the path -- /openai/deployments/{name}/... -- which is the
+            // shape Foundry answers on, and which the api-version above belongs to.
+            useDeploymentBasedUrls: true,
+          },
+        }
+      }
+
       const resource = iife(() => {
         return [
           provider.options?.resourceName,
@@ -260,7 +363,10 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
       }
 
       return {
-        autoload: false,
+        // A resource is configured and Azure is handing this process an identity, so there is a
+        // reachable model even though no key was ever entered. Without an identity this stays
+        // false and azure appears only once a key is configured, exactly as before.
+        autoload: ManagedIdentity.available(),
         async getModel(sdk: any, modelID: string, options?: Record<string, any>) {
           return selectAzureLanguageModel(sdk, modelID, Boolean(options?.["useCompletionUrls"]))
         },
@@ -280,7 +386,7 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
     "azure-cognitive-services": Effect.fnUntraced(function* (provider: Info) {
       const resourceName = yield* dep.get("AZURE_COGNITIVE_SERVICES_RESOURCE_NAME")
       return {
-        autoload: false,
+        autoload: Boolean(resourceName) && ManagedIdentity.available(),
         async getModel(sdk: any, modelID: string, options?: Record<string, any>) {
           return selectAzureLanguageModel(sdk, modelID, Boolean(options?.["useCompletionUrls"]))
         },
@@ -1713,6 +1819,21 @@ const layer = Layer.effect(
 
         if (baseURL !== undefined) options["baseURL"] = baseURL
         if (options["apiKey"] === undefined && provider.key) options["apiKey"] = provider.key
+
+        // Azure defaults to the process's managed identity once every configured key has had its
+        // chance: nothing above produced one, and Azure is handing this process an identity, so
+        // the identity is the credential. createAzure calls tokenProvider on every request and
+        // turns the result into `Authorization: Bearer` — caching lives in ManagedIdentity, so
+        // this stays cheap. It also refuses to receive both, hence the apiKey guard.
+        if (
+          model.api.npm === "@ai-sdk/azure" &&
+          options["apiKey"] === undefined &&
+          options["tokenProvider"] === undefined &&
+          ManagedIdentity.available()
+        ) {
+          options["tokenProvider"] = () => ManagedIdentity.token()
+        }
+
         if (model.headers)
           options["headers"] = {
             ...options["headers"],

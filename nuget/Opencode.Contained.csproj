@@ -15,8 +15,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <AssemblyName>opencode-fork-launcher</AssemblyName>
-    <RootNamespace>Opencode.Fork</RootNamespace>
+    <AssemblyName>opencode-contained-launcher</AssemblyName>
+    <RootNamespace>Opencode.Contained</RootNamespace>
     <!-- Keep each RID's build output apart so packing one does not pick up the
          other. BaseIntermediateOutputPath is deliberately left alone: MSBuild
          reads it before this point (MSB3539), and obj/ holds nothing RID-specific. -->
@@ -26,7 +26,7 @@
   <PropertyGroup>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>opencode-fork</ToolCommandName>
-    <PackageId>Opencode.Fork.$(PayloadRid)</PackageId>
+    <PackageId>Opencode.Contained.$(PayloadRid)</PackageId>
     <Version>0.0.0-dev</Version>
     <Description>Runnable package of the opencode fork CLI for $(PayloadRid). Carries a self-contained binary compiled by Bun, so no Node.js or Bun runtime is required on the host.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

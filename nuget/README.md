@@ -1,4 +1,4 @@
-# Opencode.Fork
+# Opencode.Contained
 
 A runnable NuGet packaging of this opencode fork, built as a .NET global tool so it can be
 published to an Azure Artifacts feed and installed anywhere `dotnet` is available.
@@ -12,8 +12,8 @@ The compiled binary is platform-specific, so there is one package per runtime id
 
 | Package | Platform |
 | --- | --- |
-| `Opencode.Fork.win-x64` | Windows x64 |
-| `Opencode.Fork.linux-x64` | Linux x64 (glibc) |
+| `Opencode.Contained.win-x64` | Windows x64 |
+| `Opencode.Contained.linux-x64` | Linux x64 (glibc) |
 
 Both expose the same command: **`opencode-fork`** — named so it can be installed alongside an
 upstream `opencode` without colliding.
@@ -25,9 +25,12 @@ upstream `opencode` without colliding.
 ## Install
 
 ```sh
-dotnet tool install -g Opencode.Fork.win-x64 --add-source <feed-or-directory>
+dotnet tool install -g Opencode.Contained.win-x64 --version 1.18.4-beta.1 --add-source <feed-or-directory>
 opencode-fork --version
 ```
+
+The published versions are prereleases, so `dotnet tool install` will not pick one up without
+an explicit `--version` (or `--prerelease`).
 
 ## Use
 
@@ -46,23 +49,31 @@ Requires `bun` (the version pinned in the root `package.json`) and the .NET SDK.
 
 ```sh
 bun install
-bun run script/package-nuget.ts --rid win-x64 --version 1.18.4
-bun run script/package-nuget.ts --rid linux-x64 --version 1.18.4
+bun run script/package-nuget.ts --rid win-x64
+bun run script/package-nuget.ts --rid linux-x64
 ```
 
 Packages land in `dist/nuget`. Useful flags: `--skip-build`, `--skip-deps`, `--skip-pack`,
 `--out <dir>`.
 
-### Why `--version` matters
+### Versioning
 
-Left unset, `Script.version` (`packages/script/src/index.ts`) derives the version from the
-current git branch: on any branch other than `latest` it produces `0.0.0-<branch>-<timestamp>`,
-and on `latest` it fetches the newest release from registry.npmjs.org. Passing `--version` sets
-`OPENCODE_VERSION`, which makes the build deterministic, keeps `opencode-fork --version` in
-agreement with the package version, and avoids the network call.
+The version lives in one place: `PACKAGE_VERSION` in `script/package-nuget.ts`, currently
+`1.18.4-beta.1`. Bump the prerelease label there for each build that goes to the feed —
+`1.18.4-beta.2`, and so on. `--version <v>` still overrides it for a one-off build.
 
-Note that NuGet treats `0.0.0-...` as a prerelease, so a package built without `--version`
-needs `--prerelease` to install.
+It is deliberately not taken from `packages/opencode/package.json`. That number is upstream
+opencode's, so merging upstream would silently change what this package claims to be, and two
+builds of the same upstream version could not be told apart.
+
+The label needs its SemVer hyphen — `1.18.4-beta.1`, not `1.18.4.beta.1`. NuGet requires a
+numeric fourth component, so the dotted form is rejected. Prereleases also sort *below* the
+plain release, so `1.18.4-beta.2` is older than `1.18.4` as far as NuGet is concerned.
+
+Whatever is used becomes `OPENCODE_VERSION` for the Bun build, so `opencode-fork --version`
+agrees with the package version. That also bypasses `Script.version`
+(`packages/script/src/index.ts`), which would otherwise derive a version from the git branch
+and, on the `latest` channel, reach out to registry.npmjs.org.
 
 ### A caveat about `bun.lock`
 

@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Opencode.Fork;
+namespace Opencode.Contained;
 
 /// <summary>
 /// Thin launcher for the packaged opencode fork. The package carries a
