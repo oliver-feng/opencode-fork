@@ -781,6 +781,17 @@ function defaultModelFromConfig(
   const configured = configuredModel ? Provider.parseModel(configuredModel) : undefined
   if (configured && providers[configured.providerID]?.models[configured.modelID]) return configured
 
+  // Where the environment named an Azure deployment, that deployment is the intended default: the
+  // container is configured for one model and expects the session to open on it, not on whichever
+  // model the cross-provider sort ranks highest (big-pickle, say). Mirrors the same preference in
+  // Provider.defaultModel; a configured model above still wins.
+  const azureDeployment = process.env["OPENCODE_AZURE_DEPLOYMENT"]?.trim()
+  if (azureDeployment) {
+    const azure = providers[ProviderV2.ID.azure]
+    const azureModel = azure?.models[azureDeployment] ?? (azure ? Provider.sort(Object.values(azure.models))[0] : undefined)
+    if (azure && azureModel) return { providerID: azure.id, modelID: azureModel.id }
+  }
+
   // First-session ACP startup must not scan historical sessions just to infer
   // a default. Configured model, opencode provider, then sorted best model keep
   // the protocol response deterministic without extra session/message reads.

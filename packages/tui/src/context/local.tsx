@@ -48,6 +48,36 @@ export function recentModels(
     .map((item) => ({ providerID: item.providerID, modelID: item.modelID }))
 }
 
+/**
+ * The model a fresh session opens on when nothing else (a --model flag, config, or a recently used
+ * model) has already decided.
+ *
+ * Where OPENCODE_AZURE_DEPLOYMENT names a deployment and the azure provider is present, that
+ * deployment is the intended default: the container is configured for exactly one model and expects
+ * a session to open on it, not on whichever provider happens to sort first -- amazon-bedrock lands
+ * ahead of azure, so the previous "first provider" fallback opened sessions on the wrong model
+ * entirely. Otherwise the first provider's default (or its first model) stands, unchanged.
+ */
+export function pickFallbackProviderModel(
+  providers: { id: string; models: Record<string, { id: string }> }[],
+  providerDefault: Record<string, string>,
+  azureDeployment: string | undefined,
+): { providerID: string; modelID: string } | undefined {
+  if (azureDeployment) {
+    const azure = providers.find((item) => item.id === "azure")
+    if (azure) {
+      const modelID = azure.models[azureDeployment]?.id ?? providerDefault[azure.id]
+      if (modelID) return { providerID: azure.id, modelID }
+    }
+  }
+
+  const provider = providers[0]
+  if (!provider) return undefined
+  const modelID = providerDefault[provider.id] ?? Object.values(provider.models)[0]?.id
+  if (!modelID) return undefined
+  return { providerID: provider.id, modelID }
+}
+
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
   name: "Local",
   init: () => {
@@ -221,16 +251,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           }
         }
 
-        const provider = sync.data.provider[0]
-        if (!provider) return undefined
-        const defaultModel = sync.data.provider_default[provider.id]
-        const firstModel = Object.values(provider.models)[0]
-        const model = defaultModel ?? firstModel?.id
-        if (!model) return undefined
-        return {
-          providerID: provider.id,
-          modelID: model,
-        }
+        return pickFallbackProviderModel(
+          sync.data.provider,
+          sync.data.provider_default,
+          process.env.OPENCODE_AZURE_DEPLOYMENT?.trim(),
+        )
       })
 
       const currentModel = createMemo(() => {
