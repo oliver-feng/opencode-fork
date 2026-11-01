@@ -3,6 +3,23 @@ export function parse(value: string) {
   return { providerID, modelID: modelID.join("/") }
 }
 
+export function fallback(
+  models: readonly { providerID: string; id: string }[] | undefined,
+  azureDeployment: string | undefined,
+) {
+  const deployment = azureDeployment
+    ?.split(",")
+    .map((item) => item.trim())
+    .find(Boolean)
+  const azure = deployment
+    ? (models?.find((item) => item.providerID === "azure" && item.id === deployment) ??
+      models?.find((item) => item.providerID === "azure"))
+    : undefined
+  const model = azure ?? models?.[0]
+  if (!model) return undefined
+  return { providerID: model.providerID, modelID: model.id }
+}
+
 export function formatRef(model: { providerID: string; id: string; variant?: string }) {
   return [model.providerID, model.id, model.variant].filter((value) => value !== undefined).join("/")
 }

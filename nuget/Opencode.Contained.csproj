@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- One project, one package per runtime identifier. The payload is a
+       self-contained binary compiled by Bun, so each package targets exactly
+       one platform. Pass -p:PayloadRid=win-x64 (or linux-x64) when packing;
+       script/package-nuget.ts does this for each requested platform. -->
+  <PropertyGroup>
+    <PayloadRid Condition="'$(PayloadRid)' == ''">win-x64</PayloadRid>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>LatestMajor</RollForward>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>opencode-contained-launcher</AssemblyName>
+    <RootNamespace>Opencode.Contained</RootNamespace>
+    <!-- Keep each RID's build output apart so packing one does not pick up the
+         other. BaseIntermediateOutputPath is deliberately left alone: MSBuild
+         reads it before this point (MSB3539), and obj/ holds nothing RID-specific. -->
+    <BaseOutputPath>bin/$(PayloadRid)/</BaseOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>opencode-fork</ToolCommandName>
+    <PackageId>Opencode.Contained.$(PayloadRid)</PackageId>
+    <Version>0.0.0-dev</Version>
+    <Description>Runnable package of the opencode fork CLI for $(PayloadRid). Carries a self-contained binary compiled by Bun, so no Node.js or Bun runtime is required on the host.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>opencode;coding-agent;ai;llm;cli;tui;agent</PackageTags>
+    <IncludeSymbols>false</IncludeSymbols>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- The payload is a native executable next to the launcher; NuGet's
+         assembly-placement and install-script warnings do not apply to it. -->
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <NoWarn>$(NoWarn);NU5100;NU5111;NU5118;NU5119</NoWarn>
+  </PropertyGroup>
+
+  <!-- The staged payload is produced by script/package-nuget.ts. Default item
+       globs are turned off for it so the tree is included exactly once. -->
+  <PropertyGroup>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="payload/**" />
+    <EmbeddedResource Remove="payload/**" />
+    <!-- Link strips the RID segment so the payload always lands at payload/,
+         which is where the launcher looks regardless of which RID was packed. -->
+    <None Include="payload/$(PayloadRid)/**/*" CopyToOutputDirectory="PreserveNewest">
+      <Link>payload/%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </None>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

@@ -1,7 +1,37 @@
 import { describe, expect, test } from "bun:test"
-import { formatRef, parse, switchLabel } from "../../src/util/model"
+import { fallback, formatRef, parse, switchLabel } from "../../src/util/model"
 
 describe("util.model", () => {
+  const models = [
+    { providerID: "amazon-bedrock", id: "first" },
+    { providerID: "azure", id: "other-deployment" },
+    { providerID: "azure", id: "gpt-5.6-sol" },
+  ]
+
+  test("prefers the configured Azure deployment over earlier models and providers", () => {
+    expect(fallback(models, "gpt-5.6-sol")).toEqual({ providerID: "azure", modelID: "gpt-5.6-sol" })
+  })
+
+  test("uses the first nonempty configured deployment", () => {
+    expect(fallback(models, " , gpt-5.6-sol, other-deployment ")).toEqual({
+      providerID: "azure",
+      modelID: "gpt-5.6-sol",
+    })
+  })
+
+  test("falls back to an available Azure model for an unknown deployment", () => {
+    expect(fallback(models, "unknown")).toEqual({ providerID: "azure", modelID: "other-deployment" })
+  })
+
+  test("preserves the first-model fallback without a deployment or an Azure provider", () => {
+    const first = { providerID: "amazon-bedrock", modelID: "first" }
+    expect(fallback(models, undefined)).toEqual(first)
+    expect(fallback(models, "  ")).toEqual(first)
+    expect(fallback(models.slice(0, 1), "gpt-5.6-sol")).toEqual(first)
+    expect(fallback([], "gpt-5.6-sol")).toBeUndefined()
+    expect(fallback(undefined, "gpt-5.6-sol")).toBeUndefined()
+  })
+
   test("splits provider from a nested model identifier", () => {
     expect(parse("provider/org/model")).toEqual({ providerID: "provider", modelID: "org/model" })
     expect(parse("invalid")).toEqual({ providerID: "invalid", modelID: "" })

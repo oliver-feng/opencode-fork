@@ -25,7 +25,7 @@ import { useRoute } from "./route"
 import { useData } from "./data"
 import { usePermission } from "./permission"
 import { useLocation } from "./location"
-import { parse } from "../util/model"
+import { fallback, parse } from "../util/model"
 
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
   name: "Local",
@@ -201,12 +201,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           }
         }
 
-        const model = models()?.[0]
-        if (!model) return undefined
-        return {
-          providerID: model.providerID,
-          modelID: model.id,
-        }
+        return fallback(models(), process.env.OPENCODE_AZURE_DEPLOYMENT)
       })
 
       const newSessionModel = createMemo(() => {

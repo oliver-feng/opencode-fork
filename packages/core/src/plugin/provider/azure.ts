@@ -16,6 +16,7 @@ import { which } from "../../util/which.js"
 import type { PluginInternal } from "../internal.js"
 import { configuredSettings } from "./configured.js"
 import { ProviderRefresh } from "./refresh.js"
+import { ManagedIdentity } from "./azure-managed-identity.js"
 
 const cognitiveScope = "https://cognitiveservices.azure.com/.default"
 const foundryScope = "https://ai.azure.com/.default"
@@ -82,6 +83,11 @@ export function make(
         deployments?: readonly Deployment[]
         connection?: Effect.Success<ReturnType<typeof ctx.integration.connection.active>>
       } = {}
+      const endpoint = process.env.OPENCODE_AZURE_ENDPOINT?.trim()
+      const configuredDeployments = (process.env.OPENCODE_AZURE_DEPLOYMENT ?? "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
 
       const command = (args: string[]) =>
         processes
@@ -375,8 +381,14 @@ export function make(
           )
             continue
           const resourceName = resourceFor(item.provider)
-          const websocket = responsesWebSocketCapable(item.provider)
-          if (!resourceName && !websocket) continue
+          const websocket =
+            (!endpoint || item.provider.id !== Provider.ID.azure) && responsesWebSocketCapable(item.provider)
+          const ambient =
+            item.provider.id === Provider.ID.azure &&
+            ManagedIdentity.available() &&
+            Boolean(endpoint || resourceName || item.provider.settings?.baseURL)
+          if (!resourceName && !websocket && !ambient && !(endpoint && item.provider.id === Provider.ID.azure))
+            continue
           evt.update(item.provider.id, (provider) => {
             provider.settings = {
               ...provider.settings,
@@ -386,6 +398,18 @@ export function make(
                 ? { baseURL: expandResourceName(provider.settings.baseURL, resourceName) }
                 : {}),
             }
+            if (provider.id !== Provider.ID.azure) return
+            if (endpoint) {
+              provider.settings = {
+                ...provider.settings,
+                baseURL: azureBaseURL(endpoint),
+                apiVersion: process.env.OPENCODE_AZURE_API_VERSION?.trim() || "v1",
+                useDeploymentBasedUrls: false,
+              }
+            }
+            if (!ambient) return
+            if (provider.activation === "auto") provider.activation = "enabled"
+            if (!loaded.connection && provider.settings.apiKey === undefined) provider.settings.apiKey = false
           })
         }
         const item = evt.get(Provider.ID.azure)
@@ -399,6 +423,35 @@ export function make(
         })
       })
       yield* ctx.model.transform((models) => {
+        if (configuredDeployments.length) {
+          const preferred = models.default.get()
+          for (const model of models.list(Provider.ID.azure)) {
+            if (configuredDeployments.includes(model.id)) continue
+            if (preferred?.providerID === Provider.ID.azure && preferred.id === model.id) continue
+            models.remove(Provider.ID.azure, model.id)
+          }
+          for (const deployment of configuredDeployments) {
+            const id = Model.ID.make(deployment)
+            if (models.get(Provider.ID.azure, id)) continue
+            models.update(Provider.ID.azure, id, (model) => {
+              model.package = "@opencode/ai/providers/azure/responses"
+              model.capabilities = { tools: true, input: ["text"], output: ["text"] }
+              model.limit = { context: 128_000, output: 16_384 }
+            })
+          }
+        }
+        if (endpoint) {
+          for (const model of models.list(Provider.ID.azure)) {
+            models.update(Provider.ID.azure, model.id, (model) => {
+              model.settings = { ...model.settings, baseURL: azureBaseURL(endpoint) }
+            })
+          }
+        }
+        const deployment = configuredDeployments[0]
+        if (deployment && !models.default.get()) {
+          const id = Model.ID.make(deployment)
+          if (models.get(Provider.ID.azure, id)?.enabled) models.default.set(Provider.ID.azure, id)
+        }
         for (const item of models.provider.list()) {
           if (
             item.provider.id !== Provider.ID.azure &&
@@ -423,7 +476,7 @@ export function make(
             })
           }
         }
-        if (!loaded.deployments) return
+        if (configuredDeployments.length || !loaded.deployments) return
         // Narrowing here rather than in the provider catalog keeps every catalog model available as the base
         // of a model the user configures explicitly; those are applied after this transform.
         const catalog = models.list(Provider.ID.azure)
@@ -456,6 +509,11 @@ export function make(
       // at the transport hooks rather than stored as a credential.
       const bearer = Effect.fn("AzurePlugin.bearer")(function* (url: string) {
         const connection = yield* ctx.integration.connection.active(Provider.ID.azure)
+        if (!connection && ManagedIdentity.available())
+          return yield* Effect.tryPromise(() => ManagedIdentity.token()).pipe(
+            Effect.map((access) => `Bearer ${access}`),
+            Effect.orDie,
+          )
         const credential = connection
           ? yield* ctx.integration.connection.resolve(connection).pipe(Effect.orElseSucceed(() => undefined))
           : undefined
@@ -473,6 +531,8 @@ export function make(
         (evt) =>
           Effect.gen(function* () {
             if (evt.model.providerID !== Provider.ID.azure) return
+            if (!loaded.connection && (evt.request.headers.has("api-key") || evt.request.headers.has("x-api-key")))
+              return
             const authorization = yield* bearer(evt.request.url)
             if (!authorization) return
             evt.request.headers.delete("api-key")
@@ -487,6 +547,7 @@ export function make(
         (evt) =>
           Effect.gen(function* () {
             if (evt.model.providerID !== Provider.ID.azure) return
+            if (!loaded.connection && (evt.headers["api-key"] || evt.headers["x-api-key"])) return
             const authorization = yield* bearer(evt.url)
             if (!authorization) return
             delete evt.headers["api-key"]
@@ -501,6 +562,15 @@ export function make(
 }
 
 export const AzurePlugin = make()
+
+function azureBaseURL(endpoint: string) {
+  const url = new URL(endpoint)
+  const path = url.pathname.replace(/\/+$/, "")
+  if (path === "" || path === "/openai" || path === "/openai/v1") {
+    url.pathname = url.hostname.endsWith(".openai.azure.com") ? "/openai" : "/openai/v1"
+  }
+  return url.toString().replace(/\/+$/, "")
+}
 
 function deploymentsKey(
   connection: Parameters<typeof IntegrationConnection.key>[0],
