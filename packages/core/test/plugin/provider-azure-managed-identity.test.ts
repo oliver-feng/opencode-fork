@@ -67,7 +67,7 @@ it.effect("makes a configured deployment the fresh-session default and sends man
         })
         const model = yield* models.default()
         expect(model?.providerID).toBe(Provider.ID.azure)
-        expect(model?.id).toBe("custom-deployment")
+        expect(model?.id).toBe(Model.ID.make("custom-deployment"))
         expect(model?.capabilities.tools).toBe(true)
         expect(model?.limit).toEqual({ context: 128_000, output: 16_384 })
         const request = yield* hooks.trigger("session", "http.request", {
@@ -103,11 +103,30 @@ it.effect("keeps catalog capabilities and an explicit default instead of replaci
         })
         yield* models.transform((editor) => editor.default.set(Provider.ID.openai, Model.ID.make("explicit-model")))
         yield* start
-        expect((yield* models.default())?.id).toBe("explicit-model")
+        expect((yield* models.default())?.id).toBe(Model.ID.make("explicit-model"))
         expect((yield* models.get(Provider.ID.azure, Model.ID.make("catalog-model")))?.limit).toEqual({
           context: 400_000,
           output: 128_000,
         })
+      }),
+  ),
+)
+
+it.effect("preserves an explicit Azure default outside the environment deployment list", () =>
+  withEnv(
+    {
+      ...environment,
+      OPENCODE_AZURE_TOKEN: "managed-token",
+      OPENCODE_AZURE_ENDPOINT: endpoint,
+      OPENCODE_AZURE_DEPLOYMENT: "custom-deployment",
+    },
+    () =>
+      Effect.gen(function* () {
+        const models = yield* Model.Service
+        yield* models.transform((editor) => editor.default.set(Provider.ID.azure, Model.ID.make("catalog-model")))
+        yield* start
+        expect((yield* models.default())?.id).toBe(Model.ID.make("catalog-model"))
+        expect(yield* models.get(Provider.ID.azure, Model.ID.make("catalog-model"))).toBeDefined()
       }),
   ),
 )

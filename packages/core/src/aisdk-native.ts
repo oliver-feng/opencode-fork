@@ -295,7 +295,7 @@ const Credentials = Schema.Struct({
 
 const Legacy = Schema.StructWithRest(
   Schema.Struct({
-    apiKey: lenient(Schema.String),
+    apiKey: lenient(Schema.Union([Schema.String, Schema.Literal(false)])),
     baseURL: lenient(Schema.String),
     headers: lenient(Schema.Record(Schema.String, Schema.String)),
     extraBody: lenient(Schema.Record(Schema.String, Schema.Unknown)),

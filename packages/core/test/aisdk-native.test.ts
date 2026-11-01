@@ -290,6 +290,10 @@ describe("AISDKNative", () => {
     expect(AISDKNative.native("@ai-sdk/azure", { providerID: "azure", shape: "completions" })).toBe(
       "@opencode/ai/providers/azure/chat",
     )
+    expect(map("@ai-sdk/azure", { apiKey: false, resourceName: "resource" }, "deployment")).toEqual({
+      package: "@opencode/ai/providers/azure/responses",
+      settings: { apiKey: false, resourceName: "resource" },
+    })
   })
 
   test("maps Bedrock provider and request options", () => {

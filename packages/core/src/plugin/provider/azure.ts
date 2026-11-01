@@ -427,7 +427,7 @@ export function make(
           const preferred = models.default.get()
           for (const model of models.list(Provider.ID.azure)) {
             if (configuredDeployments.includes(model.id)) continue
-            if (preferred?.providerID === Provider.ID.azure && preferred.id === model.id) continue
+            if (preferred?.providerID === Provider.ID.azure && preferred.modelID === model.id) continue
             models.remove(Provider.ID.azure, model.id)
           }
           for (const deployment of configuredDeployments) {

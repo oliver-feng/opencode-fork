@@ -27,7 +27,7 @@ const RIDS: Record<string, string> = {
 // be told apart. The prerelease label needs its SemVer hyphen (1.18.4-beta.1,
 // not 1.18.4.beta.1) -- NuGet requires a numeric fourth component, so the
 // dotted form is rejected outright.
-const PACKAGE_VERSION = "1.18.4-beta.6"
+const PACKAGE_VERSION = "2.2.5-beta.1"
 
 const root = path.resolve(import.meta.dir, "..")
 const codingAgentDir = path.join(root, "packages", "cli")
