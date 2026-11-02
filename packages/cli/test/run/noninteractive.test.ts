@@ -320,8 +320,17 @@ describe("runNonInteractivePrompt", () => {
       .filter(Boolean)
       .map((line) => JSON.parse(line))
 
-    expect(events).toHaveLength(1)
+    expect(events.map((event) => event.type)).toEqual(["tool_start", "tool_use"])
     expect(events[0]).toMatchObject({
+      type: "tool_start",
+      timestamp: 2,
+      part: {
+        id: "call_grep",
+        tool: "grep",
+        state: { status: "running", input: { pattern: "needle" }, time: { start: 1 } },
+      },
+    })
+    expect(events[1]).toMatchObject({
       type: "tool_use",
       part: {
         tool: "grep",
@@ -335,8 +344,31 @@ describe("runNonInteractivePrompt", () => {
         },
       },
     })
-    expect(events[0].part.state.metadata.metadata).toEqual({ matches: 2 })
-    expect(events[0].part.state.metadata.result).toBeUndefined()
+    expect(events[1].part.state.metadata.metadata).toEqual({ matches: 2 })
+    expect(events[1].part.state.metadata.result).toBeUndefined()
+  })
+
+  test("reports a failed tool's live start and retained partial output in JSON", async () => {
+    const output = await capture({ format: "json", turn: failedTool })
+    const events = output.stdout
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+
+    expect(events.map((event) => event.type)).toEqual(["tool_start", "tool_use"])
+    expect(events[0].part).toMatchObject({
+      id: "call_failed_tool",
+      tool: "shell",
+      state: { status: "running", input: { command: "printf partial && false" } },
+    })
+    expect(events[1].part).toMatchObject({
+      id: "call_failed_tool",
+      state: {
+        status: "error",
+        error: "tool failed",
+        metadata: { metadata: { checkpoint: 1 }, content: [{ type: "text", text: "partial output" }] },
+      },
+    })
   })
 
   test("uses session.wait then reconciles projected output without a terminal event", async () => {

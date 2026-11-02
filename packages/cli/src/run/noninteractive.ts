@@ -382,6 +382,23 @@ export async function runNonInteractivePrompt(input: Input) {
           metadata: {},
           content: [],
         })
+        if (input.compatibility !== "v1") {
+          emit("tool_start", time, {
+            part: {
+              partID: current?.id ?? partID(event.id),
+              sessionID: input.sessionID,
+              messageID: event.data.assistantMessageID,
+              type: "tool",
+              id: event.data.id,
+              tool: current?.tool ?? "tool",
+              state: {
+                status: "running",
+                input: event.data.input,
+                time: { start: current?.timestamp ?? time },
+              },
+            },
+          })
+        }
         continue
       }
       if (event.type === "session.tool.progress") {
@@ -468,6 +485,7 @@ export async function runNonInteractivePrompt(input: Input) {
             input: current.input,
             error,
             metadata: {
+              ...(input.compatibility !== "v1" ? { metadata, content } : {}),
               providerCall: current.provider,
               providerResult: { executed: event.data.executed, state: event.data.native },
               rawInput: current.raw,
