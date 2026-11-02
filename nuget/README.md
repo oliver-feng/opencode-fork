@@ -50,11 +50,55 @@ Requires `bun` (the version pinned in the root `package.json`) and the .NET SDK.
 ```sh
 bun install
 bun run script/package-nuget.ts --rid win-x64
-bun run script/package-nuget.ts --rid linux-x64
 ```
 
 Packages land in `dist/nuget`. Useful flags: `--skip-build`, `--skip-deps`, `--skip-pack`,
 `--out <dir>`.
+
+### Linux: build natively in WSL
+
+**Use WSL Ubuntu for Linux packages. Do not cross-compile this fork from Windows.**
+A Windows-hosted Bun build can succeed and produce an ELF executable that reports its
+version, but fails when starting the server: bundled Effect `createRequire` calls can
+contain Windows build paths that are invalid on Linux.
+
+Enter Ubuntu from PowerShell:
+
+```powershell
+wsl -d Ubuntu
+```
+
+Prepare a separate checkout on the WSL Linux filesystem, for example
+`~/src/odin/opencode-fork/azure-portal-2611`, at the intended source revision. Include any
+intended uncommitted fixes when copying source. Do not build under `/mnt/d` or reuse
+Windows `node_modules`, junctions, caches, or compiled output. Install the pinned **Linux**
+Bun and a Linux .NET SDK in WSL.
+
+If `package.json` still uses the local tarball overrides, copy the required archives into
+`~/src/odin/npmjs.org` to preserve their `../../npmjs.org` relative paths. Configure any
+required authenticated npm feed inside WSL without committing credentials. Locked tarball
+URLs take precedence over `--registry`; preserve public npmjs URLs in committed `bun.lock`
+and never disable TLS or integrity verification to work around feed access.
+
+Run these commands **inside WSL**, from the Linux checkout:
+
+```sh
+cd ~/src/odin/opencode-fork/azure-portal-2611
+bun --version
+dotnet --info
+bun install --ignore-scripts --linker=hoisted --os=linux --cpu=x64 --libc=glibc
+OPENCODE_CHANNEL=beta bun run script/package-nuget.ts --skip-deps --rid linux-x64
+```
+
+This builds the full CLI and embedded web UI, then produces
+`dist/nuget/Opencode.Contained.linux-x64.<version>.nupkg`. `--skip-deps` reuses the native
+Linux restore instead of installing every platform again.
+
+Before publication, install the actual NuGet in Linux and verify version, help, and a
+real server-backed model/tool call. Version/help alone do not exercise server startup.
+For the Hosted worker integration, run the existing `installed opencode` test in
+Minicode's `hosted-harness.test.js` against the extracted NuGet launcher in the Linux
+worker image. Do not publish a package that fails that integration.
 
 ### Versioning
 

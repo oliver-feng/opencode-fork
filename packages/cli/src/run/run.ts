@@ -15,6 +15,7 @@ import { errorMessage } from "../util/error"
 
 export type RunCommandInput = {
   server: ServerConnection.Resolved
+  directory?: string
   message: string[]
   continue?: boolean
   session?: string
@@ -74,7 +75,7 @@ async function run(input: RunCommandInput, options: ExecutionOptions) {
   if (input.fork && !input.continue && !input.session) fail("--fork requires --continue or --session")
   if (input.worktree !== undefined && (input.continue || input.session))
     fail("--worktree starts a new session and cannot be combined with --continue or --session")
-  const root = options.root ?? process.env.PWD ?? process.cwd()
+  const root = options.root ?? input.directory ?? process.env.PWD ?? process.cwd()
   const local = localDirectory(root)
   const directory = options.useServerDirectory ? undefined : (options.directory ?? local)
   const message = mergeInput(formatMessage(input.message), process.stdin.isTTY ? undefined : await readStdin())

@@ -1034,8 +1034,10 @@
     "@effect/sql-sqlite-bun": "file:../../npmjs.org/effect-sql-sqlite-bun-4.1.0.tgz",
     "@effect/sql-sqlite-node": "file:../../npmjs.org/effect-sql-sqlite-node-4.1.0.tgz",
     "@opencode/pty": "file:../../npmjs.org/opencode-pty-0.4.0.tgz",
+    "@opencode/pty-linux-x64-gnu": "file:../../npmjs.org/opencode-pty-linux-x64-gnu-0.4.0.tgz",
     "@opencode/pty-win32-x64": "file:../../npmjs.org/opencode-pty-win32-x64-0.4.0.tgz",
     "@opentui/core": "file:../../npmjs.org/opentui-core-0.8.1.tgz",
+    "@opentui/core-linux-x64": "file:../../npmjs.org/opentui-core-linux-x64-0.8.1.tgz",
     "@opentui/core-win32-x64": "file:../../npmjs.org/opentui-core-win32-x64-0.8.1.tgz",
     "@opentui/keymap": "file:../../npmjs.org/opentui-keymap-0.8.1.tgz",
     "@opentui/solid": "file:../../npmjs.org/opentui-solid-0.8.1.tgz",
@@ -1947,6 +1949,8 @@
 
     "@opencode/pty": ["@opencode/pty@../../npmjs.org/opencode-pty-0.4.0.tgz", { "optionalDependencies": { "@opencode/pty-darwin-arm64": "0.4.0", "@opencode/pty-darwin-x64": "0.4.0", "@opencode/pty-linux-arm64-gnu": "0.4.0", "@opencode/pty-linux-arm64-musl": "0.4.0", "@opencode/pty-linux-x64-gnu": "0.4.0", "@opencode/pty-linux-x64-musl": "0.4.0", "@opencode/pty-win32-arm64": "0.4.0", "@opencode/pty-win32-x64": "0.4.0" }, "bin": { "opencode-pty": "./bin/opencode-pty.js" } }, "sha512-v7cLT71yfoNM5FlyPGwMjeqIJbr0DneGq4NpoOY5iAKpsevzOIcsI2E0fiDWajuk5xAFRxwyv4CpGqow7cu79Q=="],
 
+    "@opencode/pty-linux-x64-gnu": ["@opencode/pty-linux-x64-gnu@../../npmjs.org/opencode-pty-linux-x64-gnu-0.4.0.tgz", {}, "sha512-Xal/d0+xp6XE4iCGUAw4JTQ4uf5l8V0EIbeKq+e03cHJewOMKZk4fooQjxpZvQIToBHRtnCJAmd+EEhVxXiDDw=="],
+
     "@opencode/pty-win32-x64": ["@opencode/pty-win32-x64@../../npmjs.org/opencode-pty-win32-x64-0.4.0.tgz", {}, "sha512-P1QJLUX918/y8he8VEBSYoiN5bYhUnJtEaEpiE5fxoYsDP9nqAHXqIrGxTNNnda5jOBcCalxxy0WhL8qgeKOqQ=="],
 
     "@opencode/schema": ["@opencode/schema@workspace:packages/schema"],
@@ -2014,6 +2018,8 @@
     "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.43.0", "https://registry.npmjs.org/@opentelemetry/semantic-conventions/-/semantic-conventions-1.43.0.tgz", {}, "sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg=="],
 
     "@opentui/core": ["@opentui/core@../../npmjs.org/opentui-core-0.8.1.tgz", { "dependencies": { "bun-ffi-structs": "0.3.1", "diff": "9.0.0", "marked": "17.0.1", "string-width": "7.2.0" }, "optionalDependencies": { "@opentui/core-darwin-arm64": "0.8.1", "@opentui/core-darwin-x64": "0.8.1", "@opentui/core-linux-arm64": "0.8.1", "@opentui/core-linux-arm64-musl": "0.8.1", "@opentui/core-linux-x64": "0.8.1", "@opentui/core-linux-x64-musl": "0.8.1", "@opentui/core-win32-arm64": "0.8.1", "@opentui/core-win32-x64": "0.8.1" }, "peerDependencies": { "web-tree-sitter": "0.25.10" } }, "sha512-WmnpnVZn2MdyYNEahQNn4k3OrIkQKfcwPVrX/DjguLtl/S2g5fPeXCqHZjCg2GLMf1N4HJap0LEkTPJEvfrDXw=="],
+
+    "@opentui/core-linux-x64": ["@opentui/core-linux-x64@../../npmjs.org/opentui-core-linux-x64-0.8.1.tgz", {}, "sha512-du4V6YlGvCWs/ggc6Tj7Oc7qaoYdPpzwAeJMKUbjrg+Zv5zweNHFMN4YLbzIutTi6Ukz4KsW/hwEaQIjXHlUcA=="],
 
     "@opentui/core-win32-x64": ["@opentui/core-win32-x64@../../npmjs.org/opentui-core-win32-x64-0.8.1.tgz", {}, "sha512-+rIrkvwBJMGWdXn4GGQAmM4y+RH1Xvb9nveNyJ58SOsTOBqyWyi+63qMlxe58WVl+sVAJodEjAILcWdwrzMJ3Q=="],
 

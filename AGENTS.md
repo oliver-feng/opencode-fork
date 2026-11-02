@@ -2,6 +2,7 @@
 - Keep runtime dependencies directed from Schema to Core and Protocol, then from Core and Protocol to Server. Client runtime code may depend on Schema and Protocol but never Core or Server; `sdk` composes Client, Core, and Server.
 - This repository does not use Changesets. Do not add `.changeset` files; follow the existing release workflow instead.
 - The default branch is `dev`. Base branches and worktrees on `origin/dev`, target PRs at `dev`, and diff against `origin/dev` unless told otherwise.
+- Build Linux NuGets natively in WSL (Ubuntu), not by cross-compiling from Windows. Use a Linux-filesystem checkout and Linux dependencies; follow `nuget/README.md`.
 
 ## Live TUI Testing
 

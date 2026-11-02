@@ -401,6 +401,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
       description: "Run OpenCode with a message",
       globalFlags: ServerFlags,
       params: {
+        dir: Flag.String("dir").pipe(Flag.withDescription("Directory to run OpenCode in"), Flag.optional),
         message: Argument.String("message").pipe(
           Argument.withDescription("Message to send"),
           Argument.variadic({ min: 0 }),
